@@ -67,7 +67,7 @@ class ReadFileActor extends Actor with ActorLogging {
     }
 
     //Kill the download actor that just completed it's job
-    sender ! PoisonPill
+    context.stop(sender)
 
     val newState = state.copy(imagesDownloaded = upImagesDownloaded, downloadActorsFinished = upDownloadActorsFinished)
     context.become(doReceive(newState))
