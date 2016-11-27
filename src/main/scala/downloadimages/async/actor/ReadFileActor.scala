@@ -1,6 +1,6 @@
 package downloadimages.async.actor
 
-import akka.actor.{Actor, ActorLogging, ActorRef}
+import akka.actor.{Actor, ActorLogging, ActorRef, PoisonPill, Props}
 import downloadimages.async.actor.DownloadImageActor.DownloadImage
 import downloadimages.async.actor.ReadFileActor._
 import downloadimages.core.{IOError, foldFile}
@@ -14,16 +14,16 @@ class ReadFileActor extends Actor with ActorLogging {
   //
   //This way, our Actor becomes purely functional!
   private def doReceive(state: State): Receive = {
-    case ReadFile(filename, downloadFolder, maxDownloaders) =>
-      //Store the sender of ReadFile message (the main sender)
+    case ReadFile(filename, downloadFolder) =>
+      //Store the sender of ReadFile message (the main sender, the application itself)
       //to give it a response when all downloads have finished
-      doReadFile(state.copy(mainSender = Some(sender)), filename, downloadFolder, maxDownloaders)
+      doReadFile(state.copy(mainSender = Some(sender)), filename, downloadFolder)
 
-    case DownloadCompleted(result, downloadActorId) =>
-      doDownloadCompleted(state, result, downloadActorId)
+    case DownloadCompleted(result) =>
+      doDownloadCompleted(state, result)
 
     case FinishSuccess(readFileSender) =>
-      readFileSender ! Right(state.totalImagesDownloaded)
+      readFileSender ! Right(state.imagesDownloaded)
 
     case FinishError(readFileSender, error) =>
       readFileSender ! Left(error)
@@ -32,80 +32,77 @@ class ReadFileActor extends Actor with ActorLogging {
       logUnknownMessage(log, x)
   }
 
-  private def doReadFile(state: State, filename: String, downloadFolder: String, maxDownloaders: Int): Unit = {
-    foldFile(filename, initProcessLineStatus(state))(processLine(downloadFolder, maxDownloaders, _, _)) match {
-      case Right((newState, _, _)) => context.become(doReceive(newState.copy(eof = true)))
-      case Left(error) => self ! FinishError(sender, error)
+  private def doReadFile(state: State, filename: String, downloadFolder: String): Unit = {
+    foldFile(filename, initProcessLineStatus(state))(processLine(downloadFolder, _, _)) match {
+      case Right((_, downloadActorsCreated)) =>
+        context.become(doReceive(state.copy(downloadActorsCreated = downloadActorsCreated)))
+
+      case Left(error) =>
+        self ! FinishError(sender, error)
     }
+
+    println(">=> EOF")
   }
 
-  private def processLine(downloadFolder: String, maxDownloaders: Int, acc: ProcessLineStatus, imageUrl: String): ProcessLineStatus = {
+  private def processLine(downloadFolder: String, pls: ProcessLineStatus, imageUrl: String): ProcessLineStatus = {
     if (imageUrl.trim.isEmpty) {
-      acc
+      pls
     }
     else {
-      val (state, lineIndex, downloadActorsById) = acc
-      val downloadActorId = lineIndex % maxDownloaders
-
-      val (downloadActor, newActorsById) = downloadActorsById.get(downloadActorId) match {
-        case Some(actor) =>
-          (actor, downloadActorsById)
-
-        case None =>
-          val newDownloadActor = context.actorOf(DownloadImageActor.props(downloadActorId), s"DownloadImageActor:$downloadActorId")
-          (newDownloadActor, downloadActorsById + (downloadActorId -> newDownloadActor))
-      }
-
-      val newState = state.copy(downloadActorsFinished = state.downloadActorsFinished.updated(downloadActorId, false))
+      val (lineNumber, downloadActorsCreated) = pls
+      val downloadActor = context.actorOf(Props[DownloadImageActor], s"DownloadImageActor:$lineNumber")
       downloadActor ! DownloadImage(imageUrl, downloadFolder)
-      (newState, lineIndex + 1, newActorsById)
+      (lineNumber + 1, downloadActorsCreated + 1)
     }
   }
 
-  private def doDownloadCompleted(state: State, result: Either[IOError,Unit], downloadActorId: Int): Unit = {
-    val newState = result match {
+  private def doDownloadCompleted(state: State, result: Either[IOError,Unit]): Unit = {
+    val (upImagesDownloaded, upDownloadActorsFinished) = result match {
       case Right(_) =>
-        state.copy(
-          totalImagesDownloaded = state.totalImagesDownloaded + 1,
-          downloadActorsFinished = state.downloadActorsFinished.updated(downloadActorId, true))
+        (state.imagesDownloaded + 1, state.downloadActorsFinished + 1)
 
       case Left(error) =>
         log.error(error.message)
-        state.copy(downloadActorsFinished = state.downloadActorsFinished.updated(downloadActorId, true))
+        (state.imagesDownloaded, state.downloadActorsFinished + 1)
     }
 
+    //Kill the download actor that just completed it's job
+    sender ! PoisonPill
+
+    val newState = state.copy(imagesDownloaded = upImagesDownloaded, downloadActorsFinished = upDownloadActorsFinished)
     context.become(doReceive(newState))
 
-    val allDownloadsFinished = newState.downloadActorsFinished.forall{ case (_, finished) => finished }
-    if (allDownloadsFinished && newState.eof) {
+    if (newState.downloadActorsCreated == newState.downloadActorsFinished) {
       self ! FinishSuccess(newState.mainSender.get)
     }
   }
 }
 
 object ReadFileActor {
-  private def initProcessLineStatus(state: State): ProcessLineStatus = (state, 0, Map[Int,ActorRef]())
-
-  private type ActorsById = Map[Int,ActorRef]
-  private type ActorsFinishedById = Map[Int,Boolean]
-  private type ProcessLineStatus = (State,Int,ActorsById)
+  private def initProcessLineStatus(state: State): ProcessLineStatus = (1, 0)
 
   private case class State(
     mainSender: Option[ActorRef],
-    totalImagesDownloaded: Int,
-    downloadActorsFinished: ActorsFinishedById,
-    eof: Boolean
+    imagesDownloaded: Int,
+    downloadActorsCreated: Int,
+    downloadActorsFinished: Int
   )
   private object State {
-    def empty: State = State(None, 0, Map(), eof = false)
+    def empty: State = State(None, 0, 0, 0)
   }
 
+  private type ProcessLineStatus = (LineNumber,DownloadActorsCreated)
+  private type LineNumber = Int
+  private type DownloadActorsCreated = Int
+
+
+  /* === Messages === */
   //It's easy to know what messages an Actor can receive if they are
   //declared in it's Companion Object
 
   //Public messages anyone can send to this Actor
-  case class ReadFile(filename: String, downloadFolder: String, maxDownloaders: Int)
-  case class DownloadCompleted(result: Either[IOError,Unit], downloadActorId: Int)
+  case class ReadFile(filename: String, downloadFolder: String)
+  case class DownloadCompleted(result: Either[IOError,Unit])
 
   //Private messages only this Actor knows and sends to itself
   //They are like thoughts, if you think about it...

@@ -5,7 +5,7 @@ import downloadimages.core._
 object SyncDownloadImagesApp {
   def main(args: Array[String]): Unit = {
     val downloadFolder = args(0)
-    val start = logStart(s">>> Start(downloadFolder:'$downloadFolder')")
+    val start = logStart(s">>> Start(${getClass.getSimpleName}, downloadFolder:'$downloadFolder')")
 
     withDownloadFolder(downloadFolder) {
       val imageUrlFile = getClass.getResource("/images-to-download.txt").getFile

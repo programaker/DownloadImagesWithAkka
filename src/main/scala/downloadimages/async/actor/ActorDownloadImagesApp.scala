@@ -16,8 +16,7 @@ object ActorDownloadImagesApp {
 
   def main(args: Array[String]): Unit = {
     val downloadFolder = args(0)
-    val maxDownloaders = Integer.parseInt(args(1))
-    val start = logStart(s">>> Start(downloadFolder:'$downloadFolder', maxDownloaders: $maxDownloaders)")
+    val start = logStart(s">>> Start(${getClass.getSimpleName}, downloadFolder:'$downloadFolder')")
 
     withDownloadFolder(downloadFolder) {
       val imageUrlFile = getClass.getResource("/images-to-download.txt").getFile
@@ -25,7 +24,7 @@ object ActorDownloadImagesApp {
       val actorSystem = ActorSystem("ActorDownloadImagesApp")
       val fileReaderActor = actorSystem.actorOf(Props[ReadFileActor], "ReadFileActor")
 
-      val result = (fileReaderActor ? ReadFile(imageUrlFile, downloadFolder, maxDownloaders)).mapTo[Either[IOError,Integer]]
+      val result = (fileReaderActor ? ReadFile(imageUrlFile, downloadFolder)).mapTo[Either[IOError,Integer]]
 
       val message = result.map {
         case Right(count) => s"$count images downloaded"
@@ -35,10 +34,10 @@ object ActorDownloadImagesApp {
       message.onComplete {
         case Success(msg) =>
           println(msg)
-          systemExit(start, actorSystem)
+          terminate(start, actorSystem)
         case Failure(f) =>
           println(s"Error: ${f.getMessage}")
-          systemExit(start, actorSystem)
+          terminate(start, actorSystem)
       }
 
       println("...While the Actors work, the App can go on doing other stuff...")
@@ -46,7 +45,7 @@ object ActorDownloadImagesApp {
     }
   }
 
-  def systemExit(startTime: Long, actorSystem: ActorSystem) = {
+  def terminate(startTime: Long, actorSystem: ActorSystem) = {
     logFinish(startTime)
     actorSystem.terminate()
   }
