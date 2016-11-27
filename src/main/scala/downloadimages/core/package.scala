@@ -18,14 +18,27 @@ package object core {
       }
     }
     catch {
-      case e: Exception => Left(IOError(e.getMessage))
+      case e: Exception => Left(IOError(s"Error processing file: '$filename' => '${e.getMessage}'"))
     }
   }
 
-  def createDownloadFolder(downloadFolder: String): Boolean = {
-    val f = new File(downloadFolder)
-    f.delete()
-    f.mkdirs()
+  def withDownloadFolder(downloadFolder: String)(fn: =>Unit): Unit = {
+    val d = new File(downloadFolder)
+
+    val deleted = if (d.exists()) {
+      val emptyDir = d.listFiles().forall(file => file.delete())
+      emptyDir && d.delete()
+    }
+    else {
+      true
+    }
+
+    if (deleted && d.mkdirs()) {
+      fn
+    }
+    else {
+      println(s"- Could not create download folder: '$downloadFolder'")
+    }
   }
 
   def downloadImage(imageUrl: String, outputDir: String): Either[IOError,Unit] = {
@@ -57,11 +70,11 @@ package object core {
         }
       }
       else {
-        Left(IOError(s"Error downloading image; response code = $responseCode"))
+        Left(IOError(s"Error downloading image: '$imageUrl' => response code: $responseCode"))
       }
     }
     catch {
-      case e: Exception => Left(IOError(e.getMessage))
+      case e: Exception => Left(IOError(s"Error downloading image: '$imageUrl' => '${e.getMessage}'"))
     }
   }
 
