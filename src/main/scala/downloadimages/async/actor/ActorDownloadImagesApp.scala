@@ -11,12 +11,13 @@ import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
 object ActorDownloadImagesApp {
-  implicit val timeout = Timeout(1 hour)
-  implicit val executionContext = global()
+  private implicit val timeout = Timeout(1.hour)
+  private implicit val executionContext = global()
 
   def main(args: Array[String]): Unit = {
     val downloadFolder = args(0)
-    val start = logStart(s">>> Start(${getClass.getSimpleName}, downloadFolder:'$downloadFolder')")
+    val maxDownloadActors = Integer.parseInt(args(1))
+    val start = logStart(s">>> Start(${getClass.getSimpleName}, downloadFolder:'$downloadFolder', maxDownloadActors:$maxDownloadActors)")
 
     withDownloadFolder(downloadFolder) {
       val imageUrlFile = getClass.getResource("/images-to-download.txt").getFile
@@ -24,7 +25,7 @@ object ActorDownloadImagesApp {
       val actorSystem = ActorSystem("ActorDownloadImagesApp")
       val fileReaderActor = actorSystem.actorOf(Props[ReadFileActor], "ReadFileActor")
 
-      val result = (fileReaderActor ? ReadFile(imageUrlFile, downloadFolder)).mapTo[Either[IOError,Integer]]
+      val result = (fileReaderActor ? ReadFile(imageUrlFile, downloadFolder, maxDownloadActors)).mapTo[Either[IOError,Integer]]
 
       val message = result.map {
         case Right(count) => s"$count images downloaded"
@@ -45,7 +46,7 @@ object ActorDownloadImagesApp {
     }
   }
 
-  def terminate(startTime: Long, actorSystem: ActorSystem) = {
+  def terminate(startTime: Long, actorSystem: ActorSystem): Unit = {
     logFinish(startTime)
     actorSystem.terminate()
   }
