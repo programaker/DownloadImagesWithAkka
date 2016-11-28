@@ -1,5 +1,7 @@
 package downloadimages.async.actor
 
+import java.io.File
+
 import akka.actor.{Actor, ActorLogging, ActorRef, PoisonPill, Props, Terminated}
 import akka.routing.{Broadcast, RoundRobinPool}
 import downloadimages.async.actor.DownloadImageActor.DownloadImage
@@ -31,11 +33,12 @@ class ReadFileActor extends Actor with ActorLogging {
 
       //Store the Router Actor that will distribute messages among
       //the download Actors in a pool
-      router = createRouter(maxDownloadActors))
+      router = createRouter(maxDownloadActors)
+    )
 
     context.become(doReceive(newState))
 
-    foldFile(filename, ())(processLine(newState.router, downloadFolder, _, _)) match {
+    foldFile(filename,())(processLine(newState.router, downloadFolder, _, _)) match {
       case Right(_) =>
         //At this point, we know the file was completely read and all Actors managed
         //by the Router already have their queue of Messages to process.
@@ -62,9 +65,10 @@ class ReadFileActor extends Actor with ActorLogging {
     }
   }
 
-  private def doDownloadCompleted(state: State, result: Either[IOError,Unit]): Unit = {
+  private def doDownloadCompleted(state: State, result: Either[IOError,File]): Unit = {
     val upImagesDownloaded = result match {
-      case Right(_) =>
+      case Right(imageFile) =>
+        println(s"< Image file: $imageFile")
         state.imagesDownloaded + 1
 
       case Left(error) =>
@@ -112,7 +116,7 @@ object ReadFileActor {
 
   //Public messages anyone can send to this Actor
   case class ReadFile(filename: String, downloadFolder: String, maxDownloadActors: Int)
-  case class DownloadCompleted(result: Either[IOError,Unit])
+  case class DownloadCompleted(result: Either[IOError,File])
 
   //Private messages only this Actor knows and sends to itself
   //They are like thoughts, if you think about it...

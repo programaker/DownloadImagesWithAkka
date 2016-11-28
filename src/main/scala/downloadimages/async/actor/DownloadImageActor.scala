@@ -12,7 +12,7 @@ class DownloadImageActor extends Actor with ActorLogging {
   }
 
   private def doDownloadImage(imageUrl: String, downloadFolder: String): Unit = {
-    println(s". ${self.path.name} is downloading image '$imageUrl'")
+    println(s"> ${self.path.name} is downloading image '$imageUrl'")
     sender ! DownloadCompleted(downloadImage(imageUrl, downloadFolder))
   }
 }

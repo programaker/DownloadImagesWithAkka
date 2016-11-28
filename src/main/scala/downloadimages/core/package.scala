@@ -22,7 +22,7 @@ package object core {
     }
   }
 
-  def withDownloadFolder(downloadFolder: String)(fn: =>Unit): Unit = {
+  def withDownloadFolder[A](downloadFolder: String)(fn: String => A): Either[IOError,A] = {
     val d = new File(downloadFolder)
 
     val deleted = if (d.exists()) {
@@ -34,14 +34,14 @@ package object core {
     }
 
     if (deleted && d.mkdirs()) {
-      fn
+      Right(fn(downloadFolder))
     }
     else {
-      println(s"- Could not create download folder: '$downloadFolder'")
+      Left(IOError(s"Could not create download folder: '$downloadFolder'"))
     }
   }
 
-  def downloadImage(imageUrl: String, outputDir: String): Either[IOError,Unit] = {
+  def downloadImage(imageUrl: String, outputDir: String): Either[IOError,File] = {
     try {
       val url = new URL(imageUrl)
       val urlFilename = url.getFile
@@ -62,7 +62,7 @@ package object core {
             .takeWhile(bytesRead => bytesRead != -1)
             .foreach(bytesRead => out.write(buffer, 0, bytesRead))
 
-          Right()
+          Right(new File(outputFilename))
         }
         finally {
           out.close()
@@ -78,13 +78,16 @@ package object core {
     }
   }
 
-  def logStart(message: String): Long = {
-    println(message)
-    System.currentTimeMillis()
+  def imageUrlFile(clientClass: Class[_]): String = {
+    clientClass.getResource("/images-to-download.txt").getFile
   }
 
-  def logFinish(startTime: Long): Unit = {
-    println(s"<<< Finished. Total time was: ${System.currentTimeMillis() - startTime}ms")
+  def startMessage(clientClass: Class[_], args: Map[String,_]): String = {
+    s">>> Start(${clientClass.getSimpleName}, args:$args)"
+  }
+
+  def finishMessage(endTime: Long): String = {
+    s"<<< Finished. Total time was: ${endTime}ms"
   }
 
 

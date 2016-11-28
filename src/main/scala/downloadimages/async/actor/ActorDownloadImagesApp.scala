@@ -5,7 +5,7 @@ import akka.dispatch.ExecutionContexts.global
 import akka.pattern.ask
 import akka.util.Timeout
 import downloadimages.async.actor.ReadFileActor.ReadFile
-import downloadimages.core.{IOError, logFinish, logStart, withDownloadFolder}
+import downloadimages.core._
 
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
@@ -17,37 +17,36 @@ object ActorDownloadImagesApp {
   def main(args: Array[String]): Unit = {
     val downloadFolder = args(0)
     val maxDownloadActors = Integer.parseInt(args(1))
-    val start = logStart(s">>> Start(${getClass.getSimpleName}, downloadFolder:'$downloadFolder', maxDownloadActors:$maxDownloadActors)")
 
-    withDownloadFolder(downloadFolder) {
-      val imageUrlFile = getClass.getResource("/images-to-download.txt").getFile
+    println(startMessage(getClass, Map("downloadFolder" -> downloadFolder, "maxDownloadActors" -> maxDownloadActors)))
+    val startTime = System.currentTimeMillis()
 
+    withDownloadFolder(downloadFolder) { folder =>
       val actorSystem = ActorSystem("ActorDownloadImagesApp")
-      val fileReaderActor = actorSystem.actorOf(Props[ReadFileActor], "ReadFileActor")
+      val readFileActor = actorSystem.actorOf(Props[ReadFileActor], "ReadFileActor")
+      val actorResponse = readFileActor ? ReadFile(imageUrlFile(getClass), folder, maxDownloadActors)
 
-      val result = (fileReaderActor ? ReadFile(imageUrlFile, downloadFolder, maxDownloadActors)).mapTo[Either[IOError,Integer]]
+      println("...While the Actors work, the App can go on doing other stuff...")
+      println("...Like print these useless messages...")
 
-      val message = result.map {
+      val fMessage = actorResponse.mapTo[Either[IOError,Integer]].map {
         case Right(count) => s"$count images downloaded"
         case Left(error) => error.message
       }
 
-      message.onComplete {
+      fMessage.onComplete {
         case Success(msg) =>
           println(msg)
-          terminate(start, actorSystem)
+          println(terminate(actorSystem, startTime))
         case Failure(f) =>
           println(s"Error: ${f.getMessage}")
-          terminate(start, actorSystem)
+          println(terminate(actorSystem, startTime))
       }
-
-      println("...While the Actors work, the App can go on doing other stuff...")
-      println("...Like print these useless messages...")
     }
   }
 
-  def terminate(startTime: Long, actorSystem: ActorSystem): Unit = {
-    logFinish(startTime)
+  private def terminate(actorSystem: ActorSystem, startTime: Long): String = {
     actorSystem.terminate()
+    finishMessage(System.currentTimeMillis() - startTime)
   }
 }

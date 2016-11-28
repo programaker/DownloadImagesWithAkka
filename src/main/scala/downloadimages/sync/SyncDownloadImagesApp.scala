@@ -5,34 +5,41 @@ import downloadimages.core._
 object SyncDownloadImagesApp {
   def main(args: Array[String]): Unit = {
     val downloadFolder = args(0)
-    val start = logStart(s">>> Start(${getClass.getSimpleName}, downloadFolder:'$downloadFolder')")
 
-    withDownloadFolder(downloadFolder) {
-      val imageUrlFile = getClass.getResource("/images-to-download.txt").getFile
+    println(startMessage(getClass, Map("downloadFolder" -> downloadFolder)))
+    val startTime = System.currentTimeMillis()
 
-      val imageCount = foldFile(imageUrlFile, 0) {(count, imageUrl) =>
-        if (imageUrl.trim.isEmpty) {
-          count
-        }
-        else {
-          println(s". Downloading image '$imageUrl'")
-
-          downloadImage(imageUrl, downloadFolder) match {
-            case Right(_) =>
-              count + 1
-            case Left(error) =>
-              println(error.message)
-              count
-          }
-        }
-      }
-
-      println(imageCount match {
+    val eResult = withDownloadFolder(downloadFolder) { folder =>
+      foldFile(imageUrlFile(getClass), 0)(processLine(folder, _, _)) match {
         case Right(count) => s"$count images downloaded"
         case Left(error) => error.message
-      })
+      }
     }
 
-    logFinish(start)
+    val msg = eResult match {
+      case Right(message) => message
+      case Left(error) => error.message
+    }
+
+    println(msg)
+    println(finishMessage(System.currentTimeMillis() - startTime))
+  }
+
+  private def processLine(folder: String, count: Int, imageUrl: String): Int = {
+    if (imageUrl.trim.isEmpty) {
+      count
+    }
+    else {
+      println(s"> Downloading image '$imageUrl'")
+
+      downloadImage(imageUrl, folder) match {
+        case Right(imageFile) =>
+          println(s"< Image file: $imageFile")
+          count + 1
+        case Left(error) =>
+          println(error.message)
+          count
+      }
+    }
   }
 }
