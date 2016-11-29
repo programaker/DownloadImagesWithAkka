@@ -16,15 +16,15 @@ object ActorDownloadImagesApp {
 
   def main(args: Array[String]): Unit = {
     val downloadFolder = args(0)
-    val maxDownloadActors = Integer.parseInt(args(1))
+    val nrOfDownloadActors = Integer.parseInt(args(1))
 
-    println(startMessage(getClass, Map("downloadFolder" -> downloadFolder, "maxDownloadActors" -> maxDownloadActors)))
+    println(startMessage(getClass, Map("downloadFolder" -> downloadFolder, "nrOfDownloadActors" -> nrOfDownloadActors)))
     val startTime = System.currentTimeMillis()
 
     withDownloadFolder(downloadFolder) { folder =>
       val actorSystem = ActorSystem("ActorDownloadImagesApp")
       val readFileActor = actorSystem.actorOf(Props[ReadImageUrlFileActor], "ReadImageUrlFileActor")
-      val actorResponse = readFileActor ? ReadImageUrlFile(imageUrlFile(getClass), folder, maxDownloadActors)
+      val actorResponse = readFileActor ? ReadImageUrlFile(imageUrlFile(getClass), folder, nrOfDownloadActors)
 
       println("...While the Actors work, the App can go on doing other stuff...")
       println("...Like print these useless messages...")

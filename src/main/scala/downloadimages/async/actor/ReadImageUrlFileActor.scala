@@ -17,14 +17,14 @@ class ReadImageUrlFileActor extends Actor with ActorLogging {
   //
   //This way, our Actor becomes purely functional!
   private def doReceive(state: State): Receive = {
-    case ReadImageUrlFile(filename, downloadFolder, maxDownloadActors) => doReadFile(state, filename, downloadFolder, maxDownloadActors)
+    case ReadImageUrlFile(filename, downloadFolder, nrOfDownloadActors) => doReadFile(state, filename, downloadFolder, nrOfDownloadActors)
     case DownloadCompleted(result) => doDownloadCompleted(state, result)
     case Terminated(terminatedActor) => doTerminate(state, terminatedActor)
     case FinishError(readFileSender, error) => readFileSender ! Left(error)
     case x => logUnknownMessage(log, x)
   }
 
-  private def doReadFile(state: State, filename: String, downloadFolder: String, maxDownloadActors: Int): Unit = {
+  private def doReadFile(state: State, filename: String, downloadFolder: String, nrOfDownloadActors: Int): Unit = {
     val newState = state.copy(
       //Store the sender of ReadImageUrlFile message (the application itself),
       //which is the entry point of the Actor's workflow,
@@ -33,7 +33,7 @@ class ReadImageUrlFileActor extends Actor with ActorLogging {
 
       //Store the Router Actor that will distribute messages among
       //the download Actors in a pool
-      router = createRouter(maxDownloadActors)
+      router = createRouter(nrOfDownloadActors)
     )
 
     context.become(doReceive(newState))
@@ -88,10 +88,13 @@ class ReadImageUrlFileActor extends Actor with ActorLogging {
       .foreach(application => application ! Right(state.imagesDownloaded))
   }
 
-  private def createRouter(maxDownloadActors: Int): Option[ActorRef] = {
+  private def createRouter(nrOfDownloadActors: Int): Option[ActorRef] = {
     //Create a Router Actor that uses a Pool with Round Robin strategy
-    //to distribute messages among its $maxDownloadActors Actors
-    val router = context.actorOf(RoundRobinPool(maxDownloadActors).props(Props[DownloadImageActor]))
+    //to distribute messages among its n Actors
+    //
+    //But BEWARE! The Pool will create ALL those n Actors at once! If you pass a sufficiently large
+    //number, you might get an OutOfMemoryError (I've tested myself, passing Int.MaxValue to the Pool)
+    val router = context.actorOf(RoundRobinPool(nrOfDownloadActors).props(Props[DownloadImageActor]))
 
     //Watch the Router Actor to intercept the Terminated message
     //
@@ -115,7 +118,7 @@ object ReadImageUrlFileActor {
   //declared in it's Companion Object
 
   //Public messages anyone can send to this Actor
-  case class ReadImageUrlFile(filename: String, downloadFolder: String, maxDownloadActors: Int)
+  case class ReadImageUrlFile(filename: String, downloadFolder: String, nrOfDownloadActors: Int)
   case class DownloadCompleted(result: Either[IOError,File])
 
   //Private messages only this Actor knows and sends to itself
