@@ -5,10 +5,10 @@ import java.io.File
 import akka.actor.{Actor, ActorLogging, ActorRef, PoisonPill, Props, Terminated}
 import akka.routing.{Broadcast, RoundRobinPool}
 import downloadimages.async.actor.DownloadImageActor.DownloadImage
-import downloadimages.async.actor.ReadFileActor._
+import downloadimages.async.actor.ReadImageUrlFileActor._
 import downloadimages.core.{IOError, foldFile}
 
-class ReadFileActor extends Actor with ActorLogging {
+class ReadImageUrlFileActor extends Actor with ActorLogging {
   //type Receive = PartialFunction[Any,Unit]
   override def receive: Receive = doReceive(State.empty)
 
@@ -17,7 +17,7 @@ class ReadFileActor extends Actor with ActorLogging {
   //
   //This way, our Actor becomes purely functional!
   private def doReceive(state: State): Receive = {
-    case ReadFile(filename, downloadFolder, maxDownloadActors) => doReadFile(state, filename, downloadFolder, maxDownloadActors)
+    case ReadImageUrlFile(filename, downloadFolder, maxDownloadActors) => doReadFile(state, filename, downloadFolder, maxDownloadActors)
     case DownloadCompleted(result) => doDownloadCompleted(state, result)
     case Terminated(terminatedActor) => doTerminate(state, terminatedActor)
     case FinishError(readFileSender, error) => readFileSender ! Left(error)
@@ -26,7 +26,7 @@ class ReadFileActor extends Actor with ActorLogging {
 
   private def doReadFile(state: State, filename: String, downloadFolder: String, maxDownloadActors: Int): Unit = {
     val newState = state.copy(
-      //Store the sender of ReadFile message (the application itself),
+      //Store the sender of ReadImageUrlFile message (the application itself),
       //which is the entry point of the Actor's workflow,
       //to give it a response when all downloads have finished
       application = Some(sender),
@@ -103,7 +103,7 @@ class ReadFileActor extends Actor with ActorLogging {
   }
 }
 
-object ReadFileActor {
+object ReadImageUrlFileActor {
   private case class State(application: Option[ActorRef], router: Option[ActorRef], imagesDownloaded: Int)
   private object State {
     def empty: State = State(None, None, 0)
@@ -115,7 +115,7 @@ object ReadFileActor {
   //declared in it's Companion Object
 
   //Public messages anyone can send to this Actor
-  case class ReadFile(filename: String, downloadFolder: String, maxDownloadActors: Int)
+  case class ReadImageUrlFile(filename: String, downloadFolder: String, maxDownloadActors: Int)
   case class DownloadCompleted(result: Either[IOError,File])
 
   //Private messages only this Actor knows and sends to itself

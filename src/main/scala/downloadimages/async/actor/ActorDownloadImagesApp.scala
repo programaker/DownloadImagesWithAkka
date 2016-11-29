@@ -4,7 +4,7 @@ import akka.actor.{ActorSystem, Props}
 import akka.dispatch.ExecutionContexts.global
 import akka.pattern.ask
 import akka.util.Timeout
-import downloadimages.async.actor.ReadFileActor.ReadFile
+import downloadimages.async.actor.ReadImageUrlFileActor.ReadImageUrlFile
 import downloadimages.core._
 
 import scala.concurrent.duration._
@@ -23,8 +23,8 @@ object ActorDownloadImagesApp {
 
     withDownloadFolder(downloadFolder) { folder =>
       val actorSystem = ActorSystem("ActorDownloadImagesApp")
-      val readFileActor = actorSystem.actorOf(Props[ReadFileActor], "ReadFileActor")
-      val actorResponse = readFileActor ? ReadFile(imageUrlFile(getClass), folder, maxDownloadActors)
+      val readFileActor = actorSystem.actorOf(Props[ReadImageUrlFileActor], "ReadImageUrlFileActor")
+      val actorResponse = readFileActor ? ReadImageUrlFile(imageUrlFile(getClass), folder, maxDownloadActors)
 
       println("...While the Actors work, the App can go on doing other stuff...")
       println("...Like print these useless messages...")

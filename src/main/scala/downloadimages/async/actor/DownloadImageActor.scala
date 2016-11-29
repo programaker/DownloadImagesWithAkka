@@ -2,7 +2,7 @@ package downloadimages.async.actor
 
 import akka.actor.{Actor, ActorLogging}
 import downloadimages.async.actor.DownloadImageActor.DownloadImage
-import downloadimages.async.actor.ReadFileActor.DownloadCompleted
+import downloadimages.async.actor.ReadImageUrlFileActor.DownloadCompleted
 import downloadimages.core.downloadImage
 
 class DownloadImageActor extends Actor with ActorLogging {
