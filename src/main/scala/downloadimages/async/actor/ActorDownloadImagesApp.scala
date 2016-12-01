@@ -34,13 +34,13 @@ object ActorDownloadImagesApp {
         case Left(error) => error.message
       }
 
-      futureErrorOrSummaryMessage.onComplete {
-        case Success(msg) =>
-          println(msg)
-          println(terminate(actorSystem, startTime))
-        case Failure(f) =>
-          println(s"Error: ${f.getMessage}")
-          println(terminate(actorSystem, startTime))
+      futureErrorOrSummaryMessage.onComplete { tryMessage =>
+        println(tryMessage match {
+          case Success(msg) => msg
+          case Failure(f) => s"Error: ${f.getMessage}"
+        })
+
+        println(terminate(actorSystem, startTime))
       }
     }
   }
