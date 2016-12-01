@@ -17,14 +17,13 @@ class ReadImageUrlFileActor extends Actor with ActorLogging {
   //
   //This way, our Actor becomes purely functional!
   private def doReceive(state: State): Receive = {
-    case ReadImageUrlFile(filename, downloadFolder, nrOfDownloadActors) => doReadFile(state, filename, downloadFolder, nrOfDownloadActors)
-    case DownloadCompleted(result) => doDownloadCompleted(state, result)
+    case ReadImageUrlFile(filename, downloadFolder, numberOfDownloadActors) => doReadFile(state, filename, downloadFolder, numberOfDownloadActors)
+    case DownloadCompleted(errorOrImageFile) => doDownloadCompleted(state, errorOrImageFile)
     case Terminated(terminatedActor) => doTerminate(state, terminatedActor)
-    case FinishError(readFileSender, error) => readFileSender ! Left(error)
     case x => logUnknownMessage(log, x)
   }
 
-  private def doReadFile(state: State, filename: String, downloadFolder: String, nrOfDownloadActors: Int): Unit = {
+  private def doReadFile(state: State, filename: String, downloadFolder: String, numberOfDownloadActors: Int): Unit = {
     val newState = state.copy(
       //Store the sender of ReadImageUrlFile message (the application itself),
       //which is the entry point of the Actor's workflow,
@@ -33,26 +32,26 @@ class ReadImageUrlFileActor extends Actor with ActorLogging {
 
       //Store the Router Actor that will distribute messages among
       //the download Actors in a pool
-      router = createRouter(nrOfDownloadActors)
+      router = createRouter(numberOfDownloadActors)
     )
 
     context.become(doReceive(newState))
 
     foldFile(filename,())(processLine(newState.router, downloadFolder, _, _)) match {
-      case Right(_) =>
-        //At this point, we know the file was completely read and all Actors managed
-        //by the Router already have their queue of Messages to process.
-        //
-        //So, we broadcast a PoisonPill message to the Router here to tell it
-        //and its Actors to terminate after they finish all their Messages
-        //
-        //When this happens, a Terminated(actor) message will be sent and we will
-        //catch it, because we've told the context to watch the Router
-        newState.router.foreach{ r => r ! Broadcast(PoisonPill) }
-
-      case Left(error) =>
-        self ! FinishError(sender, error)
+      //If an error happened while reading the url file, tell the bad news to the application
+      case error: Left[_,_] => sender ! error
+      case _ => ()
     }
+
+    //At this point, we know the file was completely read and all Actors managed
+    //by the Router already have their queue of Messages to process.
+    //
+    //So, we broadcast a PoisonPill message to the Router here to tell it
+    //and its Actors to terminate after they finish all their Messages
+    //
+    //When this happens, a Terminated(actor) message will be sent and we will
+    //catch it, because we've told the context to watch the Router in createRouter()
+    newState.router.foreach{ _ ! Broadcast(PoisonPill) }
 
     println(">=> EOF")
   }
@@ -61,40 +60,40 @@ class ReadImageUrlFileActor extends Actor with ActorLogging {
     if (!imageUrl.trim.isEmpty) {
       //Sending a message to the Router Actor will make it choose one Actor
       //in its pool (based on the strategy given in its creation) to perform it
-      router.foreach{ r => r ! DownloadImage(imageUrl, downloadFolder) }
+      router.foreach{ _ ! DownloadImage(imageUrl, downloadFolder) }
     }
   }
 
-  private def doDownloadCompleted(state: State, result: Either[IOError,File]): Unit = {
-    val upImagesDownloaded = result match {
+  private def doDownloadCompleted(state: State, errorOrImageFile: Either[IOError,File]): Unit = {
+    val newState = errorOrImageFile match {
       case Right(imageFile) =>
         println(s"< Image file: $imageFile")
-        state.imagesDownloaded + 1
+        state.copy(imagesDownloaded = state.imagesDownloaded + 1)
 
       case Left(error) =>
         log.error(error.message)
-        state.imagesDownloaded
+        state
     }
 
-    context.become(doReceive(state.copy(imagesDownloaded = upImagesDownloaded)))
+    context.become(doReceive(newState))
   }
 
   private def doTerminate(state: State, terminatedActor: ActorRef): Unit = {
     //If terminatedActor is the Router Actor, it means that all download actors it
     //supervises have terminated and we can send the final response to the application
     state.router
-      .filter(r => r == terminatedActor)
-      .flatMap(_ => state.application)
-      .foreach(application => application ! Right(state.imagesDownloaded))
+      .filter{ _ == terminatedActor }
+      .flatMap{ _ => state.application }
+      .foreach{ application => application ! Right(state.imagesDownloaded) }
   }
 
-  private def createRouter(nrOfDownloadActors: Int): Option[ActorRef] = {
+  private def createRouter(numberOfDownloadActors: Int): Option[ActorRef] = {
     //Create a Router Actor that uses a Pool with Round Robin strategy
     //to distribute messages among its n Actors
     //
     //But BEWARE! The Pool will create ALL those n Actors at once! If you pass a sufficiently large
     //number, you might get an OutOfMemoryError (I've tested myself, passing Int.MaxValue to the Pool)
-    val router = context.actorOf(RoundRobinPool(nrOfDownloadActors).props(Props[DownloadImageActor]))
+    val router = context.actorOf(RoundRobinPool(numberOfDownloadActors).props(Props[DownloadImageActor]))
 
     //Watch the Router Actor to intercept the Terminated message
     //
@@ -118,11 +117,6 @@ object ReadImageUrlFileActor {
   //declared in it's Companion Object
 
   //Public messages anyone can send to this Actor
-  case class ReadImageUrlFile(filename: String, downloadFolder: String, nrOfDownloadActors: Int)
-  case class DownloadCompleted(result: Either[IOError,File])
-
-  //Private messages only this Actor knows and sends to itself
-  //They are like thoughts, if you think about it...
-  private case class FinishSuccess(readFileSender: ActorRef)
-  private case class FinishError(readFileSender: ActorRef, error: IOError)
+  case class ReadImageUrlFile(filename: String, downloadFolder: String, numberOfDownloadActors: Int)
+  case class DownloadCompleted(errorOrImageFile: Either[IOError,File])
 }

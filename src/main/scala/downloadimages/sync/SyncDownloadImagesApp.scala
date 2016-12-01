@@ -1,6 +1,6 @@
 package downloadimages.sync
 
-import downloadimages.core._
+import downloadimages.core.{downloadImage, imageUrlFile, withDownloadFolder, startMessage, finishMessage, foldFile}
 
 object SyncDownloadImagesApp {
   def main(args: Array[String]): Unit = {
@@ -9,14 +9,14 @@ object SyncDownloadImagesApp {
     println(startMessage(getClass, Map("downloadFolder" -> downloadFolder)))
     val startTime = System.currentTimeMillis()
 
-    val eResult = withDownloadFolder(downloadFolder) { folder =>
+    val errorOrSummaryMessage = withDownloadFolder(downloadFolder) { folder =>
       foldFile(imageUrlFile(getClass), 0)(processLine(folder, _, _)) match {
         case Right(count) => s"$count images downloaded"
         case Left(error) => error.message
       }
     }
 
-    val msg = eResult match {
+    val msg = errorOrSummaryMessage match {
       case Right(message) => message
       case Left(error) => error.message
     }

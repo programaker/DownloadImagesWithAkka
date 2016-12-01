@@ -5,9 +5,9 @@ import akka.dispatch.ExecutionContexts.global
 import akka.pattern.ask
 import akka.util.Timeout
 import downloadimages.async.actor.ReadImageUrlFileActor.ReadImageUrlFile
-import downloadimages.core._
+import downloadimages.core.{imageUrlFile, IOError, withDownloadFolder, startMessage, finishMessage}
 
-import scala.concurrent.duration._
+import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Success}
 
 object ActorDownloadImagesApp {
@@ -16,25 +16,25 @@ object ActorDownloadImagesApp {
 
   def main(args: Array[String]): Unit = {
     val downloadFolder = args(0)
-    val nrOfDownloadActors = Integer.parseInt(args(1))
+    val numberOfDownloadActors = Integer.parseInt(args(1))
 
-    println(startMessage(getClass, Map("downloadFolder" -> downloadFolder, "nrOfDownloadActors" -> nrOfDownloadActors)))
+    println(startMessage(getClass, Map("downloadFolder" -> downloadFolder, "numberOfDownloadActors" -> numberOfDownloadActors)))
     val startTime = System.currentTimeMillis()
 
     withDownloadFolder(downloadFolder) { folder =>
       val actorSystem = ActorSystem("ActorDownloadImagesApp")
       val readFileActor = actorSystem.actorOf(Props[ReadImageUrlFileActor], "ReadImageUrlFileActor")
-      val actorResponse = readFileActor ? ReadImageUrlFile(imageUrlFile(getClass), folder, nrOfDownloadActors)
+      val futureActorResponse = readFileActor ? ReadImageUrlFile(imageUrlFile(getClass), folder, numberOfDownloadActors)
 
       println("...While the Actors work, the App can go on doing other stuff...")
       println("...Like print these useless messages...")
 
-      val fMessage = actorResponse.mapTo[Either[IOError,Integer]].map {
+      val futureErrorOrSummaryMessage = futureActorResponse.mapTo[Either[IOError,Integer]].map {
         case Right(count) => s"$count images downloaded"
         case Left(error) => error.message
       }
 
-      fMessage.onComplete {
+      futureErrorOrSummaryMessage.onComplete {
         case Success(msg) =>
           println(msg)
           println(terminate(actorSystem, startTime))

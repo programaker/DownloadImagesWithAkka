@@ -9,12 +9,12 @@ import scala.annotation.tailrec
 package object core {
   def foldFile[A](filename: String, zero: A)(fn: (A, String) => A): Either[IOError,A] = {
     try {
-      val sc = new Scanner(new FileInputStream(filename), "UTF-8")
+      val scanner = new Scanner(new FileInputStream(filename), "UTF-8")
       try {
-        foldFileLoop(sc, zero)(fn)
+        foldFileLoop(scanner, zero)(fn)
       }
       finally {
-        sc.close()
+        scanner.close()
       }
     }
     catch {
@@ -23,17 +23,17 @@ package object core {
   }
 
   def withDownloadFolder[A](downloadFolder: String)(fn: String => A): Either[IOError,A] = {
-    val d = new File(downloadFolder)
+    val df = new File(downloadFolder)
 
-    val deleted = if (d.exists()) {
-      val emptyDir = d.listFiles().forall(file => file.delete())
-      emptyDir && d.delete()
+    val deleted = if (df.exists()) {
+      val emptyDir = df.listFiles().forall{ file => file.delete() }
+      emptyDir && df.delete()
     }
     else {
       true
     }
 
-    if (deleted && d.mkdirs()) {
+    if (deleted && df.mkdirs()) {
       Right(fn(downloadFolder))
     }
     else {
@@ -54,13 +54,13 @@ package object core {
       if (responseCode == 200) {
         val in = conn.getInputStream
         val out = new FileOutputStream(outputFilename)
-        val buffer = new Array[Byte](1024)
+        val buffer = new Array[Byte](2048)
 
         try {
           Stream
             .continually(in.read(buffer))
-            .takeWhile(bytesRead => bytesRead != -1)
-            .foreach(bytesRead => out.write(buffer, 0, bytesRead))
+            .takeWhile{ bytesRead => bytesRead != -1 }
+            .foreach{ bytesRead => out.write(buffer, 0, bytesRead) }
 
           Right(new File(outputFilename))
         }
