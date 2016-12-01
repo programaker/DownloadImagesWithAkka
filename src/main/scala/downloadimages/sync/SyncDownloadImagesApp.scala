@@ -12,16 +12,15 @@ object SyncDownloadImagesApp {
     val errorOrSummaryMessage = withDownloadFolder(downloadFolder) { folder =>
       foldFile(imageUrlFile(getClass), 0)(processLine(folder, _, _)) match {
         case Right(count) => s"$count images downloaded"
-        case Left(error) => error.message
+        case Left(foldFileError) => foldFileError.message
       }
     }
 
-    val msg = errorOrSummaryMessage match {
+    println(errorOrSummaryMessage match {
       case Right(message) => message
-      case Left(error) => error.message
-    }
+      case Left(withDownloadFolderError) => withDownloadFolderError.message
+    })
 
-    println(msg)
     println(finishMessage(System.currentTimeMillis() - startTime))
   }
 
