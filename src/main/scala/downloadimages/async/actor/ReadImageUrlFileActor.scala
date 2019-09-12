@@ -17,13 +17,26 @@ class ReadImageUrlFileActor extends Actor with ActorLogging {
   //
   //This way, our Actor becomes purely functional!
   private def doReceive(state: State): Receive = {
-    case ReadImageUrlFile(filename, downloadFolder, numberOfDownloadActors) => doReadFile(state, filename, downloadFolder, numberOfDownloadActors)
-    case DownloadCompleted(errorOrImageFile) => doDownloadCompleted(state, errorOrImageFile)
-    case Terminated(terminatedActor) => doTerminate(state, terminatedActor)
-    case x => logUnknownMessage(log, x)
+    case ReadImageUrlFile(filename, downloadFolder, numberOfDownloadActors) =>
+      doReadFile(state, filename, downloadFolder, numberOfDownloadActors)
+
+    case DownloadCompleted(errorOrImageFile) =>
+      doDownloadCompleted(state, errorOrImageFile)
+
+    case Terminated(terminatedActor) =>
+      doTerminate(state, terminatedActor)
+
+    case x =>
+      logUnknownMessage(log, x)
   }
 
-  private def doReadFile(state: State, filename: String, downloadFolder: String, numberOfDownloadActors: Int): Unit = {
+  private def doReadFile(
+    state: State,
+    filename: String,
+    downloadFolder: String,
+    numberOfDownloadActors: Int
+  ): Unit = {
+
     val newState = state.copy(
       //Store the sender of ReadImageUrlFile message (the application itself),
       //which is the entry point of the Actor's workflow,
@@ -115,7 +128,7 @@ object ReadImageUrlFileActor {
   /* === Messages === */
   //It's easy to know what messages an Actor can receive if they are
   //declared in it's Companion Object
-
+  //
   //Public messages anyone can send to this Actor
   case class ReadImageUrlFile(filename: String, downloadFolder: String, numberOfDownloadActors: Int)
   case class DownloadCompleted(errorOrImageFile: Either[IOError,File])

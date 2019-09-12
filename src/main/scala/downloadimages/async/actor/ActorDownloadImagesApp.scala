@@ -5,26 +5,33 @@ import akka.dispatch.ExecutionContexts.global
 import akka.pattern.ask
 import akka.util.Timeout
 import downloadimages.async.actor.ReadImageUrlFileActor.ReadImageUrlFile
-import downloadimages.core.{imageUrlFile, IOError, withDownloadFolder, startMessage, finishMessage}
+import downloadimages.core.{IOError, finishMessage, imageUrlFile, startMessage, withDownloadFolder}
 
+import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Success}
 
 object ActorDownloadImagesApp {
-  private implicit val timeout = Timeout(1.hour)
-  private implicit val executionContext = global()
+  private implicit val timeout: Timeout = Timeout(1.hour)
+  private implicit val executionContext: ExecutionContextExecutor = global()
 
   def main(args: Array[String]): Unit = {
     val downloadFolder = args(0)
     val numberOfDownloadActors = Integer.parseInt(args(1))
 
-    println(startMessage(getClass, Map("downloadFolder" -> downloadFolder, "numberOfDownloadActors" -> numberOfDownloadActors)))
+    println(startMessage(getClass, Map(
+      "downloadFolder" -> downloadFolder,
+      "numberOfDownloadActors" -> numberOfDownloadActors
+    )))
+
     val startTime = System.currentTimeMillis()
 
     withDownloadFolder(downloadFolder) { folder =>
       val actorSystem = ActorSystem("ActorDownloadImagesApp")
       val readFileActor = actorSystem.actorOf(Props[ReadImageUrlFileActor], "ReadImageUrlFileActor")
-      val futureActorResponse = readFileActor ? ReadImageUrlFile(imageUrlFile(getClass), folder, numberOfDownloadActors)
+
+      val futureActorResponse =
+        readFileActor ? ReadImageUrlFile(imageUrlFile(getClass), folder, numberOfDownloadActors)
 
       println("...While the Actors work, the App can go on doing other stuff...")
       println("...Like print these useless messages...")

@@ -5,6 +5,7 @@ import java.net.{HttpURLConnection, URL}
 import java.util.Scanner
 
 import scala.annotation.tailrec
+import scala.io.Source
 
 package object core {
   def foldFile[A](filename: String, zero: A)(fn: (A, String) => A): Either[IOError,A] = {
@@ -57,7 +58,7 @@ package object core {
         val buffer = new Array[Byte](2048)
 
         try {
-          Stream
+          LazyList
             .continually(in.read(buffer))
             .takeWhile{ bytesRead => bytesRead != -1 }
             .foreach{ bytesRead => out.write(buffer, 0, bytesRead) }
