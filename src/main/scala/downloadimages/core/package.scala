@@ -1,11 +1,13 @@
 package downloadimages
 
-import java.io.{File, FileInputStream, FileOutputStream}
-import java.net.{HttpURLConnection, URL}
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.Scanner
 
 import scala.annotation.tailrec
-import scala.io.Source
 
 package object core {
   def foldFile[A](filename: String, zero: A)(fn: (A, String) => A): Either[IOError,A] = {
