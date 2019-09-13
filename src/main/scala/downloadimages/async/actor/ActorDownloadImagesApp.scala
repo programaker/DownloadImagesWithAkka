@@ -30,18 +30,18 @@ object ActorDownloadImagesApp {
       val actorSystem = ActorSystem("ActorDownloadImagesApp")
       val readFileActor = actorSystem.actorOf(Props[ReadImageUrlFileActor], "ReadImageUrlFileActor")
 
-      val futureActorResponse =
+      val actorResponse =
         readFileActor ? ReadImageUrlFile(imageUrlFile(getClass), folder, numberOfDownloadActors)
 
       println("...While the Actors work, the App can go on doing other stuff...")
       println("...Like print these useless messages...")
 
-      val futureErrorOrSummaryMessage = futureActorResponse.mapTo[Either[IOError,Integer]].map {
+      val errorOrSummary = actorResponse.mapTo[Either[IOError,Integer]].map {
         case Right(count) => s"$count images downloaded"
         case Left(error) => error.message
       }
 
-      futureErrorOrSummaryMessage.onComplete { tryMessage =>
+      errorOrSummary.onComplete { tryMessage =>
         println(tryMessage match {
           case Success(msg) => msg
           case Failure(f) => s"Error: ${f.getMessage}"
