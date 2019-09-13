@@ -1,29 +1,19 @@
 package downloadimages
 
-import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
-import java.util.Scanner
+import java.io.{File, FileOutputStream}
+import java.net.{HttpURLConnection, URL}
 
-import scala.annotation.tailrec
+import scala.io.Source
+import scala.util.Try
 
 package object core {
-  def foldFile[A](filename: String, zero: A)(fn: (A, String) => A): Either[IOError,A] = {
-    try {
-      val scanner = new Scanner(new FileInputStream(filename), "UTF-8")
-      try {
-        foldFileLoop(scanner, zero)(fn)
-      }
-      finally {
-        scanner.close()
-      }
-    }
-    catch {
-      case e: Exception => Left(IOError(s"Error processing file: '$filename' => '${e.getMessage}'"))
-    }
-  }
+  val ImagesToDownloadFile: String = "images-to-download.txt"
+
+  def foldFile[A](filename: String, zero: A)(fn: (A, String) => A): Either[IOError,A] =
+    Try(Source.fromResource(filename).getLines().foldLeft(zero)(fn))
+      .toEither
+      .left
+      .map(e => IOError(s"Error processing file: '$filename' => '${e.getMessage}'"))
 
   def withDownloadFolder[A](downloadFolder: String)(fn: String => A): Either[IOError,A] = {
     val df = new File(downloadFolder)
@@ -31,15 +21,13 @@ package object core {
     val deleted = if (df.exists()) {
       val emptyDir = df.listFiles().forall{ file => file.delete() }
       emptyDir && df.delete()
-    }
-    else {
+    } else {
       true
     }
 
     if (deleted && df.mkdirs()) {
       Right(fn(downloadFolder))
-    }
-    else {
+    } else {
       Left(IOError(s"Could not create download folder: '$downloadFolder'"))
     }
   }
@@ -81,29 +69,11 @@ package object core {
     }
   }
 
-  def imageUrlFile(clientClass: Class[_]): String = {
-    clientClass.getResource("/images-to-download.txt").getFile
-  }
-
   def startMessage(clientClass: Class[_], args: Map[String,_]): String = {
     s">>> Start(${clientClass.getSimpleName}, args:$args)"
   }
 
   def finishMessage(endTime: Long): String = {
     s"<<< Finished. Total time was: ${endTime}ms"
-  }
-
-
-  @tailrec
-  private def foldFileLoop[A](sc: Scanner, accumulator: A)(fn: (A, String) => A): Either[IOError,A] = {
-    if (sc.ioException != null) {
-      Left(IOError(sc.ioException.getMessage))
-    }
-    else if (!sc.hasNextLine) {
-      Right(accumulator)
-    }
-    else {
-      foldFileLoop(sc, fn(accumulator, sc.nextLine()))(fn)
-    }
   }
 }
